@@ -17,3 +17,6 @@ opencv-python
 h5py
 pyyaml
 requests
+
+pytest
+pytest-html
