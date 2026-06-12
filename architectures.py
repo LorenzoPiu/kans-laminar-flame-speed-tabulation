@@ -147,9 +147,11 @@ class FCNN(nn.Module):
             train_dataset, batch_size=batch_size, shuffle=shuffle
         )
 
-        has_test = "x_val" in data and "y_val" in data
+        x_val = data.get("x_test", data.get("x_val"))
+        y_val = data.get("y_test", data.get("y_val"))
+        has_test = x_val is not None and y_val is not None
         if has_test:
-            test_dataset = TensorDataset(data["x_val"], data["y_val"])
+            test_dataset = TensorDataset(x_val, y_val)
             test_loader = DataLoader(
                 test_dataset,
                 batch_size=min(batch_size, len(test_dataset)),

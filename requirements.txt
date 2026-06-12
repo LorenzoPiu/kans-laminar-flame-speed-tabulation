@@ -11,6 +11,7 @@ torchvision
 torchaudio
 torchmetrics
 tensorboard
+optuna
 
 pillow
 opencv-python
