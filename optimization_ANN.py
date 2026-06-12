@@ -3,7 +3,7 @@
 """
 optimization_ANN.py
 ===========
-Hyperparameter optimisation for the FCNN architecture using Optuna.
+Hyperparameter Optimisation (HPO) for the FCNN architecture using Optuna.
 
 What it does
 ------------
@@ -54,8 +54,7 @@ from optuna.samplers import TPESampler
 # Local imports  (adjust relative paths if needed)
 # ---------------------------------------------------------------------------
 from architectures import FCNN
-from utils import load_training_data, TARGET_COLUMNS
-from utils_tommaso import seed_everything  # seed_everything lives here
+from utils import load_training_data, TARGET_COLUMNS, seed_everything
 
 # ---------------------------------------------------------------------------
 # Reproducibility  – set once, affects Python / NumPy / PyTorch globally
@@ -74,7 +73,7 @@ parser.add_argument(
     "--data_path", "-d",
     type=str,
     required=True,
-    default='',
+    default='mock_dataset.csv',
     help="Path to the laminar-flame dataset CSV file.",
 )
 parser.add_argument(
@@ -91,8 +90,8 @@ parser.add_argument(
 parser.add_argument(
     "--epochs", "-e",
     type=int,
-    default=10_000,
-    help="Number of training epochs per trial. Default: 10 000.",
+    default=10000,
+    help="Number of training epochs per trial. Default: 10000.",
 )
 parser.add_argument(
     "--trials", "-t",
@@ -123,7 +122,7 @@ BEST_PARAMS_PATH = os.path.join(OUTPUT_DIR, "best_params.json")
 LOG_PATH         = os.path.join(OUTPUT_DIR, "hpo_log.txt")
 
 # ---------------------------------------------------------------------------
-# Redirect stdout to log file (mirrors the PBNN HPO convention)
+# Redirect stdout to log file
 # ---------------------------------------------------------------------------
 log_file = open(LOG_PATH, "w")
 sys.stdout = log_file
@@ -137,16 +136,16 @@ OUTPUT_DIM = 1   # flame_speed or density_ratio (single scalar target)
 # ---------------------------------------------------------------------------
 # Search-space bounds  (tweak here without touching the objective)
 # ---------------------------------------------------------------------------
-N_LAYERS_LOW,  N_LAYERS_HIGH  = 2,    16
-N_NEURONS_LOW, N_NEURONS_HIGH = 16,   128
-BATCH_SIZE_LOW, BATCH_SIZE_HIGH = 16, 512   # sampled in log space
-LR_LOW,        LR_HIGH        = 1e-7, 1e-1
-WD_LOW,        WD_HIGH        = 1e-8, 1e-0
+N_LAYERS_LOW,   N_LAYERS_HIGH   = 2,    16
+N_NEURONS_LOW,  N_NEURONS_HIGH  = 8,    256
+BATCH_SIZE_LOW, BATCH_SIZE_HIGH = 512,  4096   # sampled in log space
+LR_LOW,         LR_HIGH         = 1e-9, 1e-1
+WD_LOW,         WD_HIGH         = 1e-8, 1e-0
 
 # ---------------------------------------------------------------------------
 # Validation-loss window: last 1/20th of epochs
 # ---------------------------------------------------------------------------
-N_TAIL = max(1, EPOCHS // 20)   # e.g. 500 for 10 000 epochs
+N_TAIL = max(1, EPOCHS // 20)   # e.g. 500 for 10000 epochs
 
 # ---------------------------------------------------------------------------
 # Load data once (reused across all trials)
@@ -159,21 +158,12 @@ print(f"Val-loss tail length: {N_TAIL} epochs\n")
 
 # load_training_data returns:
 #   {"x_train": Tensor, "x_val": Tensor, "y_train": Tensor, "y_val": Tensor}
-# FCNN.fit() expects keys "x_train"/"y_train" and "x_test"/"y_test",
-# so we rename "x_val"/"y_val" -> "x_test"/"y_test".
-_raw = load_training_data(DATA_PATH, target=TARGET, seed=SEED)
-
-data = {
-    "x_train": _raw["x_train"],
-    "y_train": _raw["y_train"],
-    "x_test":  _raw["x_val"],
-    "y_test":  _raw["y_val"],
-}
+data = load_training_data(DATA_PATH, target=TARGET, seed=SEED)
 
 print(
-    f"Dataset sizes  –  "
+    f"Dataset sizes  ->  "
     f"train: {data['x_train'].shape[0]}  |  "
-    f"val: {data['x_test'].shape[0]}"
+    f"val: {data['x_val'].shape[0]}"
 )
 
 # ---------------------------------------------------------------------------
