@@ -1,2 +1,4 @@
 .venv/
 mock_dataset.csv
+__pycache__
+test/__pycache__

@@ -45,17 +45,6 @@ TARGET_COLUMNS = {
     "both": ["Laminar Flame Speed S_L [m/s]", "Density Ratio (Burnt/Unburnt)"],
 }
 
-
-# --------------------------------- seeding ----------------------------------
-def set_seed(seed: int = 42) -> None:
-    """Seed every random process (python, numpy, torch) for reproducibility."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-
 # ------------------------------- full reader --------------------------------
 def read_dataset(path: str) -> pd.DataFrame:
     """Read the dataset CSV with all its variables into a pandas DataFrame."""

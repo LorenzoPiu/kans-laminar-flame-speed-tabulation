@@ -1,165 +1,249 @@
+import warnings
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.nn.init as init
 import torch.optim as optim
-import numpy as np
-import warnings
-from scipy.stats import norm
-import matplotlib.pyplot as plt
-from evaluation_metrics import gaussian_NLL
+from torch.utils.data import DataLoader, TensorDataset
 
 
 # -----------------------------------------------------------------------------
 #                               FCNN
 # -----------------------------------------------------------------------------
 class FCNN(nn.Module):
-    def __init__(self, input_dim, n_layers, n_neurons, output_dim, tr_layers=0):
-        super(FCNN, self).__init__()
-        self.layers = nn.ModuleList() # initialize the layers list as an empty list using nn.ModuleList()
-        
-        self.init_params = [input_dim, n_layers, n_neurons, output_dim, tr_layers]
+    """Fully connected feed-forward network with a built-in training loop.
+
+    Architecture: input_dim -> [n_neurons] * n_layers -> output_dim,
+    with ReLU activations on every layer except the last.
+
+    After calling ``.fit()`` the following attributes hold the per-epoch
+    loss history (plain Python lists, one entry per epoch):
+
+    - ``train_mse_loss``   : mean data-fit loss on the training set
+    - ``train_reg_loss``   : raw L1 norm of the parameters (NOT multiplied
+                             by ``weight_decay``), averaged over the batches
+                             of the epoch
+    - ``train_total_loss`` : ``train_mse_loss + weight_decay * train_reg_loss``
+    - ``test_mse_loss``    : mean data-fit loss on the test set
+    - ``test_reg_loss``    : raw L1 norm of the parameters at the end of the
+                             epoch (the model is the same for train and test,
+                             so this is simply the post-update L1 norm)
+    - ``test_total_loss``  : ``test_mse_loss + weight_decay * test_reg_loss``
+
+    The ``weight_decay`` used during training is stored in ``self.weight_decay``.
+    Successive calls to ``.fit()`` keep appending to the histories, so you can
+    resume training without losing the previous curves.
+    """
+
+    def __init__(self, input_dim, n_layers, n_neurons, output_dim):
+        super().__init__()
+
+        self.init_params = [input_dim, n_layers, n_neurons, output_dim]
         self.input_dim = input_dim
         self.n_layers = n_layers
         self.n_neurons = n_neurons
         self.output_dim = output_dim
-        self.tr_layers = tr_layers
-        
-        in_features = input_dim # input dimension for the layer
-        
-        # define the number of neurons in each layer
-        tr_layers = tr_layers+1  # something about the math that comes after is a bit confusing but somehow with this +1 it works
-        n = list()
-        n.append(input_dim)
-        for i in range(tr_layers-1):   # -1 because if not it starts creating the following one
-            n.append( input_dim +(n_neurons-input_dim)*(i+1)//tr_layers) 
-        for _ in range(n_layers):
-            n.append(n_neurons)
-        for i in range(tr_layers-1):
-            n.append( output_dim +(n_neurons-output_dim)*(tr_layers-i-1)//tr_layers) 
-        n.append(output_dim)
 
-        # Hidden layers
-        for i in range(len(n) - 1):
-            # Add layer
-            self.layers.append(nn.Linear(n[i], n[i+1]))
-        
+        dims = [input_dim] + [n_neurons] * n_layers + [output_dim]
+        self.layers = nn.ModuleList(
+            nn.Linear(dims[i], dims[i + 1]) for i in range(len(dims) - 1)
+        )
+
+        # Training configuration / history (filled in by .fit())
+        self.weight_decay = 0.0
+        self.train_mse_loss = []
+        self.train_reg_loss = []
+        self.train_total_loss = []
+        self.test_mse_loss = []
+        self.test_reg_loss = []
+        self.test_total_loss = []
+
+    # ------------------------------------------------------------------ utils
     def _initialize_weights(self, seed=None):
-            if seed is not None:
-                torch.manual_seed(seed)  # Set the seed for reproducibility
-                np.random.seed(seed)  # Set the seed for numpy (if needed)
-            
-            for layer in self.layers:
-                if isinstance(layer, nn.Linear):
-                    # Initialize weights and biases
-                    nn.init.kaiming_uniform_(layer.weight, a=np.sqrt(5))  # He initialization
-                    if layer.bias is not None:
-                        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
-                        bound = 1 / np.sqrt(fan_in)
-                        nn.init.uniform_(layer.bias, -bound, bound)  # Uniform initialization for biases
+        """Re-initialize all linear layers.
 
-    def forward(self, x):    # Function to perform forward propagation
-        for layer in self.layers[:-1]: # no activation in the last layer
+        Note: the previous manual code (kaiming_uniform with a=sqrt(5) +
+        uniform biases with bound 1/sqrt(fan_in)) is exactly what PyTorch's
+        default ``reset_parameters()`` does, so we just call that.
+        """
+        if seed is not None:
+            torch.manual_seed(seed)
+        for layer in self.layers:
+            if isinstance(layer, nn.Linear):
+                layer.reset_parameters()
+
+    def _l1_norm(self):
+        """Raw L1 norm of all parameters (weights and biases)."""
+        return sum(param.abs().sum() for param in self.parameters())
+
+    @staticmethod
+    def _resolve_device(use_gpu):
+        if use_gpu:
+            if torch.cuda.is_available():
+                return torch.device("cuda")
+            if torch.backends.mps.is_available():
+                return torch.device("mps")
+            warnings.warn("No GPU found on this system, training on CPU.")
+        return torch.device("cpu")
+
+    # ---------------------------------------------------------------- forward
+    def forward(self, x):
+        for layer in self.layers[:-1]:  # no activation on the last layer
             x = torch.relu(layer(x))
-        x = self.layers[-1](x)
-        return x
-    
-    def fit(self, data, 
-            epochs=1000, 
-            criterion=None, 
-            optimizer=None, 
-            weight_decay=0.0,
-            batch_size=None,
-            learning_rate=0.01,
-            verbose=True,
-            n_prints=20, # if verbose, how many times should plot the loss in the console
-            use_gpu=True,
-            plot_loss=True
-            ):
-        
-        """Trains the model"""
-        
-        if optimizer is None:
-            optimizer=optim.Adam(self.parameters(), lr=learning_rate)
-        
-        # initialize batch size for both training and testing datasets
-        if batch_size is None:
-            batch_size = len(data['x_train'])
-        if 'x_test' in data:
-            batch_size_test = batch_size
-            if len(data['x_test']) < batch_size_test:
-                batch_size_test = len(data['x_test'])
-            
-        # initialize the loss function
+        return self.layers[-1](x)
+
+    @torch.no_grad()
+    def predict(self, x):
+        """Forward pass in eval mode, without tracking gradients."""
+        self.eval()
+        device = next(self.parameters()).device
+        return self(x.to(device)).cpu()
+
+    # -------------------------------------------------------------------- fit
+    def fit(
+        self,
+        data,
+        epochs=1000,
+        criterion=None,
+        optimizer=None,
+        weight_decay=0.0,
+        batch_size=None,
+        learning_rate=0.01,
+        shuffle=True,
+        verbose=True,
+        n_prints=20,
+        use_gpu=True,
+        plot_loss=False,
+    ):
+        """Train the model.
+
+        Parameters
+        ----------
+        data : dict with 'x_train', 'y_train' and optionally 'x_val', 'y_val'
+               as 2-D tensors.
+        weight_decay : coefficient of the L1 penalty added to the loss.
+                       (Stored in ``self.weight_decay``. Note this is an L1
+                       penalty, unlike the ``weight_decay`` argument of PyTorch
+                       optimizers, which is L2.)
+        criterion : loss with ``reduction='mean'`` (default: ``nn.MSELoss()``).
+        batch_size : defaults to full-batch training.
+        shuffle : whether to reshuffle the training set every epoch.
+        """
+        self.weight_decay = weight_decay
+
         if criterion is None:
             criterion = nn.MSELoss()
-            
-        if use_gpu is True:
-            if torch.backends.mps.is_available():
-                device = torch.device("mps")
-            elif torch.cuda.is_available():
-                device = torch.device("cuda")
-            else:
-                warnings.warn("GPU not found on the current computing system. Training model on CPU")
-                device = torch.device("cpu")
-        else:
-            device = torch.device("cpu")
-        
-        self.train()
-        loss_list = []
-        loss_test_list = []
+        if optimizer is None:
+            optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+
+        device = self._resolve_device(use_gpu)
         self.to(device)
+
+        # ---- DataLoaders -----------------------------------------------------
+        train_dataset = TensorDataset(data["x_train"], data["y_train"])
+        if batch_size is None:
+            batch_size = len(train_dataset)
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=shuffle
+        )
+
+        has_test = "x_val" in data and "y_val" in data
+        if has_test:
+            test_dataset = TensorDataset(data["x_val"], data["y_val"])
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=min(batch_size, len(test_dataset)),
+                shuffle=False,
+            )
+
+        print_every = max(1, epochs // n_prints)
+
+        # ---- Training loop ---------------------------------------------------
         for epoch in range(epochs):
-            running_loss = 0.0
-            for idx in ordered_indices_generator(len(data['x_train']), batch_size):
-                X_batch = data['x_train'][idx, :].to(device)
-                Y_batch = data['y_train'][idx, :].to(device)
-                # Zero the parameter gradients
+            self.train()
+            running_mse = 0.0
+            running_reg = 0.0
+            n_samples = 0
+            n_batches = 0
+
+            for x_batch, y_batch in train_loader:
+                x_batch = x_batch.to(device)
+                y_batch = y_batch.to(device)
+
                 optimizer.zero_grad()
+                outputs = self(x_batch)
 
-                # Forward + Backward + Optimize
-                outputs = self.forward(X_batch)
-                loss = criterion(outputs, Y_batch)
-
-                # Add L1 regularization
-                l1_reg = 0.0
-                for param in self.parameters():
-                    l1_reg += torch.norm(param, 1)
-                loss += weight_decay * l1_reg
+                mse = criterion(outputs, y_batch)
+                reg = self._l1_norm()
+                loss = mse + weight_decay * reg
 
                 loss.backward()
                 optimizer.step()
 
-                running_loss += loss.item()
-            
-            # Save training loss
-            loss_list.append(running_loss)
-            
-            # Release memory on gpu
-            del X_batch
-            del Y_batch
-            
-            # Testing loop
-            if (('x_test' in data) and ('y_test' in data)):
-                running_test_loss = 0.0
-                for idx in ordered_indices_generator(len(data['x_test']), batch_size_test):
-                    X_batch = data['x_test'][idx, :].to(device)
-                    Y_batch = data['y_test'][idx, :].to(device)
-                    
-                    with torch.no_grad():
-                        # Forward pass + loss
-                        outputs = self.forward(X_batch)
-                        test_loss = criterion(outputs, Y_batch)
-                        
-                    # Add L1 regularization
-                    test_loss += weight_decay * l1_reg.detach() # was computed previously
+                running_mse += mse.item() * x_batch.size(0)
+                running_reg += reg.item()
+                n_samples += x_batch.size(0)
+                n_batches += 1
 
-                    running_test_loss += test_loss.item()
-                
-                loss_test_list.append(running_test_loss)
+            epoch_mse = running_mse / n_samples
+            epoch_reg = running_reg / n_batches  # params change each step -> average
+            self.train_mse_loss.append(epoch_mse)
+            self.train_reg_loss.append(epoch_reg)
+            self.train_total_loss.append(epoch_mse + weight_decay * epoch_reg)
 
-            if (epoch + 1) % (epochs//n_prints) == 0:
-                print(f"Epoch [{epoch + 1}/{epochs}], Training loss: {running_loss / len(data['x_train'])}")
-        self.train_loss = loss_list
-        self.test_loss  = loss_test_list
+            # ---- Evaluation --------------------------------------------------
+            if has_test:
+                self.eval()
+                running_mse = 0.0
+                n_samples = 0
+                with torch.no_grad():
+                    for x_batch, y_batch in test_loader:
+                        x_batch = x_batch.to(device)
+                        y_batch = y_batch.to(device)
+                        mse = criterion(self(x_batch), y_batch)
+                        running_mse += mse.item() * x_batch.size(0)
+                        n_samples += x_batch.size(0)
+                    test_reg = self._l1_norm().item()
+
+                test_mse = running_mse / n_samples
+                self.test_mse_loss.append(test_mse)
+                self.test_reg_loss.append(test_reg)
+                self.test_total_loss.append(test_mse + weight_decay * test_reg)
+
+            # ---- Logging -----------------------------------------------------
+            if verbose and (epoch + 1) % print_every == 0:
+                msg = (
+                    f"Epoch [{epoch + 1}/{epochs}] "
+                    f"train MSE: {self.train_mse_loss[-1]:.6f}"
+                )
+                if has_test:
+                    msg += f" | test MSE: {self.test_mse_loss[-1]:.6f}"
+                if weight_decay > 0:
+                    msg += f" | L1 norm: {self.train_reg_loss[-1]:.4f}"
+                print(msg)
+
+        if plot_loss:
+            self.plot_losses()
+
+    # ------------------------------------------------------------------- plot
+    def plot_losses(self, log_scale=True):
+        """Plot the per-epoch loss histories recorded during fit()."""
+        if not self.train_total_loss:
+            raise RuntimeError("No training history found. Call .fit() first.")
+
+        epochs = range(1, len(self.train_total_loss) + 1)
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.plot(epochs, self.train_total_loss, label="train total", color="C0")
+        ax.plot(epochs, self.train_mse_loss, "--", label="train MSE", color="C0")
+        if self.test_total_loss:
+            ax.plot(epochs, self.test_total_loss, label="test total", color="C1")
+            ax.plot(epochs, self.test_mse_loss, "--", label="test MSE", color="C1")
+        if log_scale:
+            ax.set_yscale("log")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.legend()
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        plt.show()
+        return fig, ax
