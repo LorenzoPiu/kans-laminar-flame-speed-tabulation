@@ -119,7 +119,7 @@ class FCNN(nn.Module):
 
         Parameters
         ----------
-        data : dict with 'x_train', 'y_train' and optionally 'x_test', 'y_test'
+        data : dict with 'x_train', 'y_train' and optionally 'x_val', 'y_val'
                as 2-D tensors.
         weight_decay : coefficient of the L1 penalty added to the loss.
                        (Stored in ``self.weight_decay``. Note this is an L1
@@ -147,9 +147,9 @@ class FCNN(nn.Module):
             train_dataset, batch_size=batch_size, shuffle=shuffle
         )
 
-        has_test = "x_test" in data and "y_test" in data
+        has_test = "x_val" in data and "y_val" in data
         if has_test:
-            test_dataset = TensorDataset(data["x_test"], data["y_test"])
+            test_dataset = TensorDataset(data["x_val"], data["y_val"])
             test_loader = DataLoader(
                 test_dataset,
                 batch_size=min(batch_size, len(test_dataset)),
