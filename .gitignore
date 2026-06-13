@@ -1,4 +1,22 @@
+# Virtual environments
 .venv/
+
+# Data
 mock_dataset.csv
+data/
+data/*
+
+# Python
 __pycache__
 test/__pycache__
+.pytest_cache
+
+# Logs
+log.*
+hpo_results/hpo_log.txt
+
+# Submit scripts
+submit.*
+
+# HPO results
+hpo_results/*
