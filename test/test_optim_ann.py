@@ -94,7 +94,7 @@ class TestParser:
         assert args.target == "flame_speed"
         assert args.epochs == 10000
         assert args.trials == 300
-        assert args.output_dir == "hpo_output"
+        assert args.output_dir == "hpo_results"
 
     def test_data_path_is_required(self):
         with pytest.raises(SystemExit):
@@ -127,7 +127,7 @@ class TestObjective:
         assert model.fit_kwargs["learning_rate"] == pytest.approx(1e-3)
         assert model.fit_kwargs["weight_decay"] == pytest.approx(1e-5)
         assert model.fit_kwargs["batch_size"] == 512
-        assert model.fit_kwargs["verbose"] is False
+        assert model.fit_kwargs["verbose"] is True
 
         # bookkeeping for the CSV export
         assert len(records) == 1
