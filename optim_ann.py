@@ -57,6 +57,13 @@ from optuna.samplers import TPESampler
 # ---------------------------------------------------------------------------
 from architectures import FCNN
 from utils import load_training_data, set_seed
+from global_vars import (
+    DATA_DIR, 
+    HPO_OUTPUT_DIR, 
+    HPO_CSV_FILENAME, 
+    HPO_BEST_PARAMS_FILENAME, 
+    HPO_LOG_FILENAME
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -115,7 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--data_path", "-d",
         type=str,
         required=True,
-        help="Path to the laminar-flame dataset CSV file.",
+        help="Path to the laminar-flame dataset CSV file. Assumes the data directory is DATA_DIR",
     )
     parser.add_argument(
         "--target", "-y",
@@ -139,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output_dir", "-o",
         type=str,
-        default="hpo_output",
+        default=HPO_OUTPUT_DIR,
         help="Directory where best_params.json, hpo_results.csv and "
              "hpo_log.txt are saved. Default: 'hpo_output'.",
     )
@@ -181,7 +188,7 @@ def make_objective(data, epochs, n_tail, trial_records, use_gpu=True):
             weight_decay=wd,
             learning_rate=lr,
             batch_size=batch_size,
-            verbose=False,
+            verbose=True,
             use_gpu=use_gpu,
         )
 
@@ -238,9 +245,9 @@ def main(argv=None) -> optuna.Study:
     args = build_parser().parse_args(argv)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    csv_path = os.path.join(args.output_dir, "hpo_results.csv")
-    best_params_path = os.path.join(args.output_dir, "best_params.json")
-    log_path = os.path.join(args.output_dir, "hpo_log.txt")
+    csv_path = os.path.join(args.output_dir, HPO_CSV_FILENAME.format(kan_or_ann="ann", target=args.target))
+    best_params_path = os.path.join(args.output_dir, HPO_BEST_PARAMS_FILENAME.format(kan_or_ann="ann", target=args.target))
+    log_path = os.path.join(args.output_dir, HPO_LOG_FILENAME.format(kan_or_ann="ann", target=args.target))
 
     n_tail = compute_tail(args.epochs)
 
