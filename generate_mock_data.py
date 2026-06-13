@@ -20,6 +20,7 @@ import pandas as pd
 
 # ----------------------------- configuration --------------------------------
 SEED = 42
+DATA_DIR = "data"
 
 # Sampling ranges for the inputs
 P_RANGE = (1.0e5, 4.0e5)      # Pa
@@ -136,7 +137,8 @@ def generate(n, path):
     ])
 
     df = pd.DataFrame(data, columns=COLUMNS)
-    df.to_csv(path, index=False)
+    os.makedirs(DATA_DIR, exists_ok=True)
+    df.to_csv(os.path.join(DATA_DIR, path), index=False)
     print(f"Wrote {n} samples to '{path}'")
     print(f"  flammable rows : {int(flammable.sum())}/{n}")
     print(f"  S_L    range   : [{s_l.min():.4f}, {s_l.max():.4f}] m/s")
@@ -156,5 +158,6 @@ if __name__ == "__main__":
         "-o", "--out", type=str, default="mock_dataset.csv",
         help="output CSV path (default: mock_dataset.csv)",
     )
+
     args = parser.parse_args()
     generate(args.n_samples, args.out)
