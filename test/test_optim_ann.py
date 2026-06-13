@@ -94,7 +94,7 @@ class TestParser:
         assert args.target == "flame_speed"
         assert args.epochs == 10000
         assert args.trials == 300
-        assert args.output_dir == "hpo_output"
+        assert args.output_dir == hpo.HPO_OUTPUT_DIR
 
     def test_data_path_is_required(self):
         with pytest.raises(SystemExit):
@@ -127,7 +127,7 @@ class TestObjective:
         assert model.fit_kwargs["learning_rate"] == pytest.approx(1e-3)
         assert model.fit_kwargs["weight_decay"] == pytest.approx(1e-5)
         assert model.fit_kwargs["batch_size"] == 512
-        assert model.fit_kwargs["verbose"] is False
+        assert model.fit_kwargs["verbose"] is True
 
         # bookkeeping for the CSV export
         assert len(records) == 1
@@ -193,9 +193,12 @@ class TestEndToEnd:
                           "-o", str(out_dir)])
 
         # --- artifacts exist ---------------------------------------------
-        best_path = out_dir / "best_params.json"
-        csv_path = out_dir / "hpo_results.csv"
-        log_path = out_dir / "hpo_log.txt"
+        best_path = out_dir / hpo.HPO_BEST_PARAMS_FILENAME.format(
+            kan_or_ann="ann", target="flame_speed")
+        csv_path = out_dir / hpo.HPO_CSV_FILENAME.format(
+            kan_or_ann="ann", target="flame_speed")
+        log_path = out_dir / hpo.HPO_LOG_FILENAME.format(
+            kan_or_ann="ann", target="flame_speed")
         assert best_path.exists() and csv_path.exists() and log_path.exists()
 
         # --- CSV: one row per trial, all losses finite ---------------------

@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+import time
 
 
 # -----------------------------------------------------------------------------
@@ -57,6 +58,7 @@ class FCNN(nn.Module):
         self.test_mse_loss = []
         self.test_reg_loss = []
         self.test_total_loss = []
+        self.training_time = 0.0
 
     # ------------------------------------------------------------------ utils
     def _initialize_weights(self, seed=None):
@@ -160,6 +162,8 @@ class FCNN(nn.Module):
 
         print_every = max(1, epochs // n_prints)
 
+        t_start = time.time()
+
         # ---- Training loop ---------------------------------------------------
         for epoch in range(epochs):
             self.train()
@@ -223,6 +227,9 @@ class FCNN(nn.Module):
                 if weight_decay > 0:
                     msg += f" | L1 norm: {self.train_reg_loss[-1]:.4f}"
                 print(msg)
+
+        t_end = time.time()
+        self.training_time = t_end - t_start
 
         if plot_loss:
             self.plot_losses()

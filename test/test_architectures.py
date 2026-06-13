@@ -38,7 +38,7 @@ def data():
 
 def quick_fit(model, data, **kwargs):
     """fit() with fast, quiet defaults for testing."""
-    defaults = dict(epochs=5, use_gpu=False, verbose=False, plot_loss=False)
+    defaults = dict(epochs=5, use_gpu=False, verbose=True, plot_loss=False)
     defaults.update(kwargs)
     model.fit(data, **defaults)
 
