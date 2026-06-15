@@ -21,3 +21,5 @@ requests
 
 pytest
 pytest-html
+
+-e ./pykan
