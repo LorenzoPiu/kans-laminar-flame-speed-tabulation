@@ -10,6 +10,7 @@ data/*
 __pycache__
 test/__pycache__
 .pytest_cache
+pykan/pykan.egg-info
 
 # Logs
 log.*
