@@ -42,7 +42,7 @@ class MLP(nn.Module):
         
     def get_act(self, x=None):
         if isinstance(x, dict):
-            x = x['train_input']
+            x = x['x_train']
         if x == None:
             if self.cache_data != None:
                 x = self.cache_data
@@ -227,9 +227,9 @@ class MLP(nn.Module):
             for i in range(len(metrics)):
                 results[metrics[i].__name__] = []
 
-        if batch == -1 or batch > dataset['train_input'].shape[0]:
-            batch_size = dataset['train_input'].shape[0]
-            batch_size_test = dataset['test_input'].shape[0]
+        if batch == -1 or batch > dataset['x_train'].shape[0]:
+            batch_size = dataset['x_train'].shape[0]
+            batch_size_test = dataset['x_val'].shape[0]
         else:
             batch_size = batch
             batch_size_test = batch
@@ -239,8 +239,8 @@ class MLP(nn.Module):
         def closure():
             global train_loss, reg_
             optimizer.zero_grad()
-            pred = self.forward(dataset['train_input'][train_id].to(self.device))
-            train_loss = loss_fn(pred, dataset['train_label'][train_id].to(self.device))
+            pred = self.forward(dataset['x_train'][train_id].to(self.device))
+            train_loss = loss_fn(pred, dataset['y_train'][train_id].to(self.device))
             if self.save_act:
                 if reg_metric == 'fa':
                     self.attribute()
@@ -256,15 +256,15 @@ class MLP(nn.Module):
             if _ == steps-1 and old_save_act:
                 self.save_act = True
             
-            train_id = np.random.choice(dataset['train_input'].shape[0], batch_size, replace=False)
-            test_id = np.random.choice(dataset['test_input'].shape[0], batch_size_test, replace=False)
+            train_id = np.random.choice(dataset['x_train'].shape[0], batch_size, replace=False)
+            test_id = np.random.choice(dataset['x_val'].shape[0], batch_size_test, replace=False)
 
             if opt == "LBFGS":
                 optimizer.step(closure)
 
             if opt == "Adam":
-                pred = self.forward(dataset['train_input'][train_id].to(self.device))
-                train_loss = loss_fn(pred, dataset['train_label'][train_id].to(self.device))
+                pred = self.forward(dataset['x_train'][train_id].to(self.device))
+                train_loss = loss_fn(pred, dataset['y_train'][train_id].to(self.device))
                 if self.save_act:
                     reg_ = self.get_reg(reg_metric, lamb_l1, lamb_entropy)
                 else:
@@ -274,15 +274,15 @@ class MLP(nn.Module):
                 loss.backward()
                 optimizer.step()
 
-            test_loss = loss_fn_eval(self.forward(dataset['test_input'][test_id].to(self.device)), dataset['test_label'][test_id].to(self.device))
+            test_loss = loss_fn_eval(self.forward(dataset['x_val'][test_id].to(self.device)), dataset['test_label'][test_id].to(self.device))
             
             
             if metrics != None:
                 for i in range(len(metrics)):
                     results[metrics[i].__name__].append(metrics[i]().item())
 
-            results['train_loss'].append(torch.sqrt(train_loss).cpu().detach().numpy())
-            results['test_loss'].append(torch.sqrt(test_loss).cpu().detach().numpy())
+            results['train_loss'].append(train_loss.cpu().detach().numpy())
+            results['test_loss'].append(test_loss.cpu().detach().numpy())
             results['reg'].append(reg_.cpu().detach().numpy())
 
             if _ % log == 0:
@@ -299,7 +299,10 @@ class MLP(nn.Module):
                             raise Exception(f'{metric} not recognized')
                         data += (results[metric][-1],)
                     pbar.set_description(string % data)
-           
+        
+            self.train_mse_loss = results['train_loss']
+            self.test_mse_loss = results['test_loss']
+
         return results
     
     @property
