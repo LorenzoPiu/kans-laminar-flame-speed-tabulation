@@ -124,7 +124,7 @@ class TestParser:
     def test_defaults(self):
         args = tann.build_parser().parse_args(["-d", "data.csv"])
         assert args.target == "flame_speed"
-        assert args.epochs == 10000
+        assert args.epochs == 1000
         assert args.best_params is None
         assert args.output_dir == tann.MODELS_DIR
         assert args.no_gpu is False

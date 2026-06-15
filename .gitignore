@@ -14,9 +14,12 @@ test/__pycache__
 # Logs
 log.*
 hpo_results/hpo_log.txt
+logs/
 
 # Submit scripts
 submit.*
+RUN_train_ann.sh
+RUN_optim_ann.sh
 
 # HPO results
 hpo_results/*

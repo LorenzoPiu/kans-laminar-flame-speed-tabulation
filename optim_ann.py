@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-optimization_ANN.py
+optim_ann.py
 ===================
 Hyperparameter Optimisation (HPO) for the FCNN architecture using Optuna.
 

@@ -11,12 +11,13 @@ S_L and the density ratio are computed from two smooth analytical functions of t
 models / regressors).
 
 Usage:
-  python generate_fake_dataset.py -n 1000 -o fake_flame_dataset.csv
+  python generate_mock_data.py -n 1000000 -o fake_flame_dataset.csv
 """
 
 import argparse
 import numpy as np
 import pandas as pd
+import os
 
 # ----------------------------- configuration --------------------------------
 SEED = 42
@@ -137,7 +138,7 @@ def generate(n, path):
     ])
 
     df = pd.DataFrame(data, columns=COLUMNS)
-    os.makedirs(DATA_DIR, exists_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
     df.to_csv(os.path.join(DATA_DIR, path), index=False)
     print(f"Wrote {n} samples to '{path}'")
     print(f"  flammable rows : {int(flammable.sum())}/{n}")
@@ -151,8 +152,8 @@ if __name__ == "__main__":
         description="Generate a fake laminar flame dataset (CSV)."
     )
     parser.add_argument(
-        "-n", "--n-samples", type=int, default=1000,
-        help="number of samples to generate (default: 1000)",
+        "-n", "--n-samples", type=int, default=1000000,
+        help="number of samples to generate (default: 1000000)",
     )
     parser.add_argument(
         "-o", "--out", type=str, default="mock_dataset.csv",
