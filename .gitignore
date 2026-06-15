@@ -20,3 +20,6 @@ submit.*
 
 # HPO results
 hpo_results/*
+
+# Saved models 
+models/

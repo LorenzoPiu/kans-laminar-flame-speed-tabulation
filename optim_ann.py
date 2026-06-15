@@ -255,14 +255,17 @@ def main(argv=None) -> optuna.Study:
 
     # redirect_stdout restores sys.stdout even if the study crashes
     with open(log_path, "w") as log_file, contextlib.redirect_stdout(log_file):
-        print(f"Loading dataset from: {args.data_path}")
+        print(f"Loading dataset from: {os.path.join(DATA_DIR, args.data_path)}")
         print(f"Target variable     : {args.target}")
         print(f"Epochs per trial    : {args.epochs}")
         print(f"Optuna trials       : {args.trials}")
         print(f"Val-loss tail length: {n_tail} epochs\n")
 
         data = normalize_split_keys(
-            load_training_data(args.data_path, target=args.target, seed=SEED)
+            load_training_data(
+                os.path.join(DATA_DIR, args.data_path), 
+                target=args.target, 
+                seed=SEED)
         )
         print(
             f"Dataset sizes  ->  "
