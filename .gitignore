@@ -11,6 +11,10 @@ __pycache__
 test/__pycache__
 .pytest_cache
 pykan/pykan.egg-info
+./pykan/pykan.egg-info/PKG-INFO
+pykan/pykan.egg-info/SOURCES.txt
+pykan/pykan.egg-info/dependency_links.txt
+pykan/pykan.egg-info/top_level.txt
 
 # Logs
 log.*
