@@ -20,7 +20,7 @@ Usage
     python train_ANN.py \\
         --data_path  /path/to/dataset.csv \\
         --target     flame_speed \\
-        --epochs     10000
+        --epochs     1000
 
 By default the best-params file is looked up in the HPO output directory
 using the same naming convention as ``optimization_ANN.py``. Override it
@@ -64,6 +64,17 @@ OUTPUT_DIM = 1  # flame_speed or density_ratio (single scalar target)
 
 # Hyperparameters expected in best_params.json (everything except "val_loss").
 REQUIRED_HPARAMS = ("n_layers", "n_neurons", "batch_size", "lr", "weight_decay")
+
+# ---------------------------------------------------------------------------
+# Fallback hyperparameters (used when best_params.json does not exist)
+# ---------------------------------------------------------------------------
+DEFAULT_HPARAMS = {
+    "n_layers":     10,
+    "n_neurons":    128,
+    "batch_size":   2048,
+    "lr":           1e-3,
+    "weight_decay": 1e-5,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -190,8 +201,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--epochs", "-e",
         type=int,
-        default=10000,
-        help="Number of training epochs for the final model. Default: 10000.",
+        default=1000,
+        help="Number of training epochs for the final model. Default: 1000.",
     )
     parser.add_argument(
         "--best_params", "-b",
@@ -230,8 +241,14 @@ def main(argv=None) -> str:
 
     set_seed(SEED, deterministic=True)
 
-    print(f"Reading best params from: {best_params_path}")
-    hparams = load_best_params(best_params_path)
+    if os.path.exists(best_params_path):
+        print(f"Reading best params from: {best_params_path}")
+        hparams = load_best_params(best_params_path)
+    else:
+        print(f"WARNING: best_params.json not found at: {best_params_path}")
+        print(f"Using default hardcoded hyperparameters.")
+        hparams = DEFAULT_HPARAMS.copy()
+        
     print(f"Hyperparameters         : {hparams}")
     print(f"Target variable         : {args.target}")
     print(f"Epochs                  : {args.epochs}\n")
