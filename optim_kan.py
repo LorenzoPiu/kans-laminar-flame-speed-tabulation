@@ -308,6 +308,9 @@ def make_objective(data, steps, n_tail, trial_records, device="cpu", ckpt_path="
         lamb = trial.suggest_float("lamb", LAMB_LOW, LAMB_HIGH, log=True)
 
         # --- build & train model -----------------------------------------
+        torch.use_deterministic_algorithms(True) # This should guarantee
+        # reproducibility of the function pykan.spline.curve2coef().
+        # Maybe it's redundant cause I already use set_seed()
         model = KAN(
             width=list(width),
             grid=grid,
