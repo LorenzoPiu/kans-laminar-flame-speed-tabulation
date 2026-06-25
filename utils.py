@@ -42,7 +42,7 @@ O2_N2_COLUMNS = [
 TARGET_COLUMNS = {
     "flame_speed": ["Laminar Flame Speed S_L [m/s]"],
     "density_ratio": ["Expansion Ratio (Unburnt/Burnt)"],
-    "both": ["Laminar Flame Speed S_L [m/s]", "Expansion Ratio (Unburnt/Burnt)"],,
+    "both": ["Laminar Flame Speed S_L [m/s]", "Expansion Ratio (Unburnt/Burnt)"],
 }
 
 # ------------------------------- full reader --------------------------------
